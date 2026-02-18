@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GitHub Issues Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0c10;
+    --surface: #111318;
+    --surface2: #161b24;
+    --border: #1e2330;
+    --accent: #3b82f6;
+    --green: #22c55e;
+    --red: #ef4444;
+    --amber: #f59e0b;
+    --text: #e2e8f0;
+    --muted: #64748b;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    padding: 36px 28px;
+  }
+
+  h1 { font-family: 'DM Serif Display', serif; font-size: 30px; font-weight: 400; }
+  .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 32px; margin-top: 4px; }
+  .header-row { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+  }
+
+  .config-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: flex-end;
+    margin-bottom: 28px;
+  }
+  .field { display: flex; flex-direction: column; gap: 8px; }
+  .field.grow { flex: 2 1 180px; }
+  .field.med  { flex: 1 1 140px; }
+
+  label {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  input, select {
+    background: #0d0f14;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cursor: pointer; }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+
+  button {
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 28px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    white-space: nowrap;
+    align-self: flex-end;
+  }
+  button:hover { opacity: 0.85; }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .error {
+    background: #1a0f0f;
+    border: 1px solid #ef444433;
+    border-radius: 10px;
+    padding: 14px 18px;
+    color: var(--red);
+    margin-bottom: 24px;
+    font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    display: none;
+  }
+
+  #loading {
+    text-align: center;
+    padding: 80px 0;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    display: none;
+  }
+  .spinner { font-size: 36px; display: block; margin-bottom: 16px; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #empty { text-align: center; padding: 80px 0; color: var(--muted); }
+  .empty-icon { font-size: 48px; opacity: 0.25; margin-bottom: 16px; }
+
+  /* Stats */
+  .stats-row { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+  .stat-card {
+    flex: 1 1 140px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+  }
+  .stat-label { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
+  .stat-value { font-family: 'DM Serif Display', serif; font-size: 42px; line-height: 1; }
+
+  /* Charts */
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  @media (max-width: 700px) { .charts-grid { grid-template-columns: 1fr; } }
+  .chart-title { font-size: 13px; font-weight: 600; margin-bottom: 18px; color: var(--text); }
+  .chart-title span { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 8px; }
+  .chart-wrap { position: relative; height: 220px; }
+  .click-hint { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-top: 10px; text-align: center; }
+
+  /* Labels */
+  .label-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .label-name { width: 160px; font-size: 12px; color: var(--muted); font-family: 'JetBrains Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+  .label-bar-bg { flex: 1; background: var(--border); border-radius: 4px; height: 8px; overflow: hidden; }
+  .label-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.6s ease; }
+  .label-count { width: 36px; text-align: right; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--text); }
+
+  /* Day Detail Panel */
+  #dayDetail { display: none; margin-top: 16px; animation: fadeIn 0.3s ease; }
+  .day-detail-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px; flex-wrap: wrap; gap: 10px;
+  }
+  .day-detail-title { font-family: 'DM Serif Display', serif; font-size: 22px; font-weight: 400; }
+  .close-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 6px 14px; font-size: 12px; border-radius: 6px; cursor: pointer;
+    font-family: 'JetBrains Mono', monospace; align-self: auto;
+  }
+  .close-btn:hover { border-color: var(--accent); color: var(--text); opacity: 1; }
+
+  .day-sections { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .day-sections { grid-template-columns: 1fr; } }
+
+  .section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .section-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .section-title { font-size: 13px; font-weight: 600; }
+  .section-count {
+    margin-left: auto; font-size: 11px; font-family: 'JetBrains Mono', monospace;
+    color: var(--muted); background: var(--border); padding: 2px 8px; border-radius: 10px;
+  }
+
+  .issue-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; padding-right: 4px; }
+  .issue-item {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; transition: border-color 0.2s;
+  }
+  .issue-item:hover { border-color: #2e3a50; }
+  .issue-number { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-bottom: 4px; }
+  .issue-title a { font-size: 13px; color: var(--text); text-decoration: none; line-height: 1.4; display: block; }
+  .issue-title a:hover { color: var(--accent); }
+  .issue-meta { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .issue-tag { font-size: 10px; font-family: 'JetBrains Mono', monospace; padding: 2px 7px; border-radius: 10px; }
+  .no-issues { color: var(--muted); font-size: 13px; font-family: 'JetBrains Mono', monospace; padding: 20px 0; text-align: center; }
+
+  #dashboard { display: none; }
+  .fade-in { animation: fadeIn 0.4s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="header-row">
+  <svg width="26" height="26" viewBox="0 0 98 96" fill="#3b82f6"><path d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.141-22.243-5.378-22.243-24.283 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z"/></svg>
+  <h1>Issues Dashboard</h1>
+</div>
+<p class="subtitle">Track open, closed, and daily issue activity · Click any bar to see issue details</p>
+
+<!-- Config -->
+<div class="card config-grid">
+  <div class="field grow">
+    <label>Repository</label>
+    <input id="repoInput" type="text" placeholder="owner/repo" value="Flexli-Technologies/mSort-Issue-Tracker" />
+  </div>
+  <div class="field grow">
+    <label>GitHub Token</label>
+    <input id="tokenInput" type="password" placeholder="ghp_••••••••••••••••" value="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" />
+  </div>
+  <div class="field med">
+    <label>From</label>
+    <input id="dateFrom" type="date" />
+  </div>
+  <div class="field med">
+    <label>To</label>
+    <input id="dateTo" type="date" />
+  </div>
+  <button id="fetchBtn" onclick="loadData()">Fetch Issues</button>
+  <button id="fetchAllBtn" onclick="loadAllData()" style="background:#1e2330;border:1px solid #2e3a50;">Fetch All Issues</button>
+</div>
+
+<div class="error" id="errorBox"></div>
+
+<div id="loading">
+  <span class="spinner">◌</span>
+  <span id="loadingMsg">Fetching issues...</span>
+</div>
+
+<div id="empty">
+  <div class="empty-icon">⎈</div>
+  <div style="font-size:15px;">Enter a repository above to get started.</div>
+  <div style="font-size:13px;margin-top:8px;opacity:0.6;">No token needed for public repos · Uses GitHub REST API</div>
+</div>
+
+<div id="dashboard">
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Open Issues</div>
+      <div class="stat-value" id="statOpen" style="color:#22c55e;">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Closed Issues</div>
+      <div class="stat-value" id="statClosed" style="color:#ef4444;">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Issues</div>
+      <div class="stat-value" id="statTotal" style="color:#3b82f6;">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Opened in Period</div>
+      <div class="stat-value" id="statNew" style="color:#f59e0b;">—</div>
+    </div>
+  </div>
+
+  <!-- Bar Charts -->
+  <div class="charts-grid">
+    <div class="card">
+      <div class="chart-title">Issues Opened Per Day <span id="dailyLabel"></span></div>
+      <div class="chart-wrap"><canvas id="dailyChart"></canvas></div>
+      <p class="click-hint">↑ click a bar to drill into that day</p>
+    </div>
+    <div class="card">
+      <div class="chart-title">Issues Closed Per Day <span id="closedDailyLabel"></span></div>
+      <div class="chart-wrap"><canvas id="closedDailyChart"></canvas></div>
+      <p class="click-hint">↑ click a bar to drill into that day</p>
+    </div>
+  </div>
+
+  <!-- Day Detail Panel -->
+  <div id="dayDetail" class="card">
+    <div class="day-detail-header">
+      <div class="day-detail-title" id="dayDetailTitle">—</div>
+      <button class="close-btn" onclick="closeDayDetail()">✕ Close</button>
+    </div>
+    <div class="day-sections">
+      <div>
+        <div class="section-header">
+          <div class="section-dot" style="background:#22c55e;"></div>
+          <div class="section-title">Opened this day</div>
+          <div class="section-count" id="openedCount">0</div>
+        </div>
+        <div class="issue-list" id="openedList"></div>
+      </div>
+      <div>
+        <div class="section-header">
+          <div class="section-dot" style="background:#ef4444;"></div>
+          <div class="section-title">Closed this day</div>
+          <div class="section-count" id="closedCount">0</div>
+        </div>
+        <div class="issue-list" id="closedList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let dailyChartInst = null;
+let closedDailyChartInst = null;
+let dateMap = {};
+
+// Default date range: last 30 days
+(function() {
+  const now = new Date();
+  document.getElementById('dateTo').value = now.toISOString().slice(0, 10);
+  const from = new Date(now); from.setDate(from.getDate() - 29);
+  document.getElementById('dateFrom').value = from.toISOString().slice(0, 10);
+})();
+
+function hide(id) { document.getElementById(id).style.display = 'none'; }
+function showBlock(id) { document.getElementById(id).style.display = 'block'; }
+
+function setError(msg) {
+  const b = document.getElementById('errorBox');
+  b.textContent = '✖ ' + msg; b.style.display = 'block';
+}
+function clearError() { document.getElementById('errorBox').style.display = 'none'; }
+
+function setLoading(msg) {
+  document.getElementById('loadingMsg').textContent = msg;
+  showBlock('loading'); hide('dashboard'); hide('empty');
+}
+
+function getNextUrl(link) {
+  if (!link) return null;
+  const m = link.match(/<([^>]+)>;\s*rel="next"/);
+  return m ? m[1] : null;
+}
+
+async function fetchAllIssues(owner, repo, token) {
+  const headers = { 'Accept': 'application/vnd.github+json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  let all = [], url = `https://api.github.com/repos/${owner}/${repo}/issues?state=all&per_page=100`;
+  while (url) {
+    setLoading(`Fetching issues... (${all.length} loaded)`);
+    const res = await fetch(url, { headers });
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.message || `HTTP ${res.status}`); }
+    const data = await res.json();
+    all = all.concat(data.filter(i => !i.pull_request));
+    url = getNextUrl(res.headers.get('Link'));
+  }
+  return all;
+}
+
+function buildDateRange(from, to) {
+  const dates = [], cur = new Date(from), end = new Date(to);
+  while (cur <= end) { dates.push(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate()+1); }
+  return dates;
+}
+
+function processIssues(issues, fromStr, toStr) {
+  const open   = issues.filter(i => i.state === 'open').length;
+  const closed = issues.filter(i => i.state === 'closed').length;
+  const dates  = buildDateRange(fromStr, toStr);
+
+  dateMap = {};
+  dates.forEach(d => { dateMap[d] = { opened: [], closed: [] }; });
+  issues.forEach(i => {
+    const ok = i.created_at?.slice(0,10); if (ok && dateMap[ok]) dateMap[ok].opened.push(i);
+    const ck = i.closed_at?.slice(0,10);  if (ck && dateMap[ck]) dateMap[ck].closed.push(i);
+  });
+
+  const openedCounts = dates.map(d => dateMap[d].opened.length);
+  const closedCounts = dates.map(d => dateMap[d].closed.length);
+  const labels = dates.map(d => d.slice(5));
+
+  return { open, closed, total: issues.length, dates, labels, openedCounts, closedCounts, newInPeriod: openedCounts.reduce((s,v)=>s+v,0) };
+}
+
+const TT = {
+  backgroundColor:'#1a1f2e', borderColor:'#1e2330', borderWidth:1,
+  titleColor:'#64748b', bodyColor:'#e2e8f0',
+  titleFont:{family:'JetBrains Mono',size:11}, bodyFont:{family:'JetBrains Mono',size:12}, padding:10
+};
+const AX = {
+  x:{ grid:{display:false}, ticks:{color:'#64748b',font:{family:'JetBrains Mono',size:10},maxRotation:0,maxTicksLimit:10}, border:{display:false} },
+  y:{ grid:{color:'#1e2330'}, ticks:{color:'#64748b',font:{family:'JetBrains Mono',size:10}}, border:{display:false}, beginAtZero:true }
+};
+
+function buildBarChart(canvasId, labels, data, color, onClickFn) {
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  return new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets:[{ data,
+      backgroundColor: data.map(v => v>0 ? color+'44':'#1e233033'),
+      borderColor: data.map(v => v>0 ? color:'#1e2330'),
+      borderWidth:1, borderRadius:3
+    }]},
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      onClick:(_,els) => { if(els.length) onClickFn(els[0].index); },
+      onHover:(_,els,chart) => { chart.canvas.style.cursor = els.length ? 'pointer':'default'; },
+      plugins:{ legend:{display:false}, tooltip:{...TT, callbacks:{label:t=>` ${t.raw} issue${t.raw!==1?'s':''}`}} },
+      scales: AX
+    }
+  });
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function issueHTML(issue) {
+  const tags = (issue.labels||[]).map(l => {
+    const c = l.color && l.color !== 'undefined' ? l.color : '475569';
+    return `<span class="issue-tag" style="background:#${c}22;color:#${c};">${escapeHtml(l.name)}</span>`;
+  }).join('');
+  const opened = issue.created_at?.slice(0,10) || '';
+  const closed = issue.closed_at ? ` · closed ${issue.closed_at.slice(0,10)}` : '';
+  return `
+    <div class="issue-item">
+      <div class="issue-number">#${issue.number} · opened ${opened}${closed}</div>
+      <div class="issue-title"><a href="${issue.html_url}" target="_blank">${escapeHtml(issue.title)}</a></div>
+      ${tags ? `<div class="issue-meta">${tags}</div>` : ''}
+    </div>`;
+}
+
+function showDayDetail(dateStr) {
+  const e = dateMap[dateStr]; if (!e) return;
+  const fmt = new Date(dateStr+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  document.getElementById('dayDetailTitle').textContent = fmt;
+  document.getElementById('openedCount').textContent = e.opened.length;
+  document.getElementById('closedCount').textContent = e.closed.length;
+  document.getElementById('openedList').innerHTML = e.opened.length
+    ? e.opened.map(issueHTML).join('')
+    : '<div class="no-issues">No issues opened this day</div>';
+  document.getElementById('closedList').innerHTML = e.closed.length
+    ? e.closed.map(issueHTML).join('')
+    : '<div class="no-issues">No issues closed this day</div>';
+  const panel = document.getElementById('dayDetail');
+  panel.style.display = 'block';
+  setTimeout(() => panel.scrollIntoView({behavior:'smooth', block:'nearest'}), 50);
+}
+
+function closeDayDetail() { document.getElementById('dayDetail').style.display = 'none'; }
+
+async function runDashboard(issues, fromStr, toStr, label) {
+  const d = processIssues(issues, fromStr, toStr);
+
+  document.getElementById('statOpen').textContent   = d.open.toLocaleString();
+  document.getElementById('statClosed').textContent = d.closed.toLocaleString();
+  document.getElementById('statTotal').textContent  = d.total.toLocaleString();
+  document.getElementById('statNew').textContent    = d.newInPeriod.toLocaleString();
+
+  document.getElementById('dailyLabel').textContent       = label;
+  document.getElementById('closedDailyLabel').textContent = label;
+
+  if (dailyChartInst)       dailyChartInst.destroy();
+  if (closedDailyChartInst) closedDailyChartInst.destroy();
+
+  dailyChartInst       = buildBarChart('dailyChart',       d.labels, d.openedCounts, '#22c55e', idx => showDayDetail(d.dates[idx]));
+  closedDailyChartInst = buildBarChart('closedDailyChart', d.labels, d.closedCounts, '#ef4444', idx => showDayDetail(d.dates[idx]));
+
+  hide('loading');
+  const dash = document.getElementById('dashboard');
+  dash.style.display = 'block';
+  dash.classList.add('fade-in');
+}
+
+async function loadData() {
+  const repo    = document.getElementById('repoInput').value.trim();
+  const token   = document.getElementById('tokenInput').value.trim();
+  const fromStr = document.getElementById('dateFrom').value;
+  const toStr   = document.getElementById('dateTo').value;
+
+  clearError(); closeDayDetail();
+  if (!fromStr || !toStr)  { setError('Please select both From and To dates.'); return; }
+  if (fromStr > toStr)     { setError('"From" date must be before "To" date.'); return; }
+  const parts = repo.split('/');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) { setError('Enter repo as owner/repo'); return; }
+
+  document.getElementById('fetchBtn').disabled = true;
+  document.getElementById('fetchAllBtn').disabled = true;
+  hide('empty'); hide('dashboard');
+  setLoading('Connecting to GitHub...');
+
+  try {
+    const issues = await fetchAllIssues(parts[0], parts[1], token);
+    await runDashboard(issues, fromStr, toStr, `${fromStr} → ${toStr}`);
+  } catch(e) {
+    hide('loading'); showBlock('empty'); setError(e.message);
+  }
+  document.getElementById('fetchBtn').disabled = false;
+  document.getElementById('fetchAllBtn').disabled = false;
+}
+
+async function loadAllData() {
+  const repo  = document.getElementById('repoInput').value.trim();
+  const token = document.getElementById('tokenInput').value.trim();
+
+  clearError(); closeDayDetail();
+  const parts = repo.split('/');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) { setError('Enter repo as owner/repo'); return; }
+
+  document.getElementById('fetchBtn').disabled = true;
+  document.getElementById('fetchAllBtn').disabled = true;
+  hide('empty'); hide('dashboard');
+  setLoading('Fetching all issues...');
+
+  try {
+    const issues = await fetchAllIssues(parts[0], parts[1], token);
+    // Derive full date range from earliest issue to today
+    const dates = issues.map(i => i.created_at?.slice(0,10)).filter(Boolean).sort();
+    const fromStr = dates[0] || new Date().toISOString().slice(0,10);
+    const toStr   = new Date().toISOString().slice(0,10);
+    // Update date pickers to reflect full range
+    document.getElementById('dateFrom').value = fromStr;
+    document.getElementById('dateTo').value   = toStr;
+    await runDashboard(issues, fromStr, toStr, `All time (${fromStr} → ${toStr})`);
+  } catch(e) {
+    hide('loading'); showBlock('empty'); setError(e.message);
+  }
+  document.getElementById('fetchBtn').disabled = false;
+  document.getElementById('fetchAllBtn').disabled = false;
+}
+
+document.getElementById('repoInput').addEventListener('keydown', e => { if(e.key==='Enter') loadData(); });
+</script>
+</body>
+</html>
